@@ -1,0 +1,45 @@
+{
+  "name": "@local/dsh-wsl-bridge",
+  "version": "0.3.8",
+  "private": true,
+  "description": "Run DeepSeek Harness commands as bash inside WSL, and pick WSL Linux folders as workspaces.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./wsl": "./wsl.js",
+    "./picker": "./picker.js",
+    "./fs": "./fs.js",
+    "./workspace": "./workspace.js",
+    "./mirror": "./mirror.js",
+    "./guest": "./guest.js",
+    "./fsproto": "./fsproto.js",
+    "./search": "./search.js",
+    "./probe": "./probe.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./search-core": "./search-core.js"
+  },
+  "icon": "./icon.svg",
+  "files": [
+    "index.js",
+    "wsl.js",
+    "picker.js",
+    "fs.js",
+    "workspace.js",
+    "mirror.js",
+    "guest.js",
+    "fsproto.js",
+    "search.js",
+    "search-core.js",
+    "probe.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

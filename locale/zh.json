@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "WSL 桥接",
+    "description": "让模型通过 WSL 里的 bash 执行命令，并在工作区选择器里加入 WSL 的 Linux 目录。"
+  }
+}

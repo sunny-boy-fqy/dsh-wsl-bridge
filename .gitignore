@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build / packaging output
+dist/
+*.tgz
+package-lock.json
+.npmrc
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+~$*.docx
+
+# python
+__pycache__/
+*.py[cod]
+
+# machine-specific config (never commit)
+.env
+*.env

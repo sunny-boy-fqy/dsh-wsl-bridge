@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "WSL bridge",
+    "description": "Runs model commands as bash inside WSL and adds WSL Linux folders to the workspace picker."
+  }
+}
