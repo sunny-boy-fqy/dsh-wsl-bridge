@@ -7,6 +7,21 @@
 
 /** A complete WSL UNC prefix addressing one distribution: `\\wsl.localhost\<d>\...` or `\\wsl$\<d>\...`. */
 const WSL_UNC = /^\\\\wsl(?:\.localhost|\$)\\([^\\]+)(?:\\([\s\S]*))?$/iu;
+/**
+ * The same WSL UNC prefix in forward-slash spelling:
+ * `//wsl.localhost/<d>/...` or `//wsl$/<d>/...`.
+ *
+ * Nobody types this spelling; a round trip through a URL-shaped path produces
+ * it. The Harness turns the `processPath` spelling
+ * ({@link windowsUncPath} → `\\wsl.localhost\<d>\...`) into a
+ * `dsh-resource://file/…` address by normalizing backslashes to slashes, and the
+ * Host then receives `//wsl.localhost/<d>/...` back as the file path. Without
+ * this translation the value falls through as a POSIX path exactly as it was,
+ * `posix.normalize` collapses its authority away to `/wsl.localhost/...`, and
+ * the guest reports every such file missing — the Sidebar file tree and the
+ * document preview then cannot open anything reached through that address.
+ */
+const WSL_UNC_FORWARD = /^\/\/wsl(?:\.localhost|\$)\/([^/]+)(?:\/([\s\S]*))?$/iu;
 /** A drive-qualified Windows path: `C:\...` (a bare `C:` is drive-relative and refused). */
 const DRIVE_ABSOLUTE = /^([A-Za-z]):\\([\s\S]*)$/u;
 /** A bare drive root: `C:\`. */
@@ -23,21 +38,36 @@ export function isWindowsAbsolute(candidate) {
 	return typeof candidate === 'string' && WINDOWS_ABSOLUTE.test(candidate);
 }
 
-/** Join already-split Windows path segments into a Linux absolute path. */
+/**
+ * Join already-split path segments into a Linux absolute path.
+ * @param segments - the tail of a UNC path without the owner; `/`- or `\`-separated.
+ * @returns the POSIX path.
+ */
 function linuxFromSegments(segments) {
 	if (segments === undefined) return '/';
-	const trimmed = segments.replace(/\\+$/u, '');
+	const trimmed = segments.replace(/[\\/]+$/u, '').replace(/^[\\/]+/u, '');
 	return trimmed === '' ? '/' : `/${trimmed.replace(/\\/gu, '/')}`;
 }
 
 /**
  * Translate one Windows path into the Linux path the target distribution sees.
- * @param candidate - the Windows workdir: a WSL UNC path, a drive path, or an already-POSIX path.
+ *
+ * Three host spellings are accepted, in addition to an already-POSIX path: a
+ * WSL UNC path in its native backslash spelling (`\\wsl.localhost\<d>\...`), the
+ * same path as a URL round trip hands it back with forward slashes
+ * (`//wsl.localhost/<d>/...`), and a drive path (`D:\work` → `/mnt/d/work`).
+ * @param candidate - the Windows workdir: a WSL UNC path in either spelling, a drive path, or an already-POSIX path.
  * @param distro - the distribution the command runs in; an empty string accepts any UNC owner.
  * @returns the Linux path, or undefined when this module cannot express it.
  */
 export function toLinuxPath(candidate, distro) {
 	if (typeof candidate !== 'string' || candidate.length === 0) return undefined;
+	const forward = WSL_UNC_FORWARD.exec(candidate);
+	if (forward !== null) {
+		const owner = forward[1];
+		if (distro !== '' && owner.toLowerCase() !== distro.toLowerCase()) return undefined;
+		return linuxFromSegments(forward[2]);
+	}
 	if (candidate.startsWith('/')) return candidate;
 	const normalized = candidate.replace(/\//gu, '\\');
 	if (normalized.startsWith('\\\\')) {

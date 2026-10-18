@@ -22,7 +22,7 @@
  * @module @local/dsh-wsl-bridge/search-core
  */
 import { posix } from 'node:path';
-import { isWindowsAbsolute, toLinuxPath } from './wsl.js';
+import { toLinuxPath } from './wsl.js';
 
 /** Directory names never entered by `grep`, matching ripgrep's VCS-ignore defaults. */
 export const VCS_EXCLUDES = ['.git', '.svn', '.hg', '.bzr', '.jj', '.sl'];
@@ -39,18 +39,21 @@ export const GREP_MAX_LINE_BYTES = 2000;
 
 /**
  * Translate any accepted spelling of one search target into its guest path.
- * @param value - an absolute Linux path, a WSL UNC path, or a Windows drive path.
+ *
+ * Every spelling goes through `toLinuxPath`: a POSIX path passes through
+ * untouched, a drive path maps onto `/mnt/<letter>/…`, and both WSL UNC
+ * spellings — the backslash one Windows APIs use and the forward-slash one a
+ * resource-address round trip produces (`//wsl.localhost/<d>/…`) — map back onto
+ * the guest path instead of being read as a POSIX path.
+ * @param value - an absolute Linux path, a WSL UNC path in either spelling, or a Windows drive path.
  * @param distro - the target distribution; an empty string accepts any UNC owner.
  * @returns the normalized Linux path, or undefined when the spelling is relative.
  */
 export function toGuestPath(value, distro) {
 	if (typeof value !== 'string' || value.length === 0) return undefined;
-	if (value.startsWith('/')) return posix.normalize(value);
-	if (isWindowsAbsolute(value)) {
-		const translated = toLinuxPath(value, distro);
-		return translated === undefined ? undefined : posix.normalize(translated);
-	}
-	return undefined;
+	const translated = toLinuxPath(value, distro);
+	if (translated === undefined || !translated.startsWith('/')) return undefined;
+	return posix.normalize(translated);
 }
 
 /**

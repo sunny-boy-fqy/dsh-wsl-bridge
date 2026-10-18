@@ -172,10 +172,24 @@ class WslFileSystem extends FileSystem {
 	key(target) {
 		return typeof target?.targetKey === 'string' ? target.targetKey : String(target?.targetKey ?? '');
 	}
+	/**
+	 * Resolve one accepted path spelling onto its canonical guest path.
+	 *
+	 * `toLinuxPath` passes an already-POSIX path through untouched, so it is the
+	 * single gate for every host spelling: a drive path, the backslash UNC path
+	 * host APIs use, and the forward-slash UNC path a `dsh-resource://file/…`
+	 * address round trip hands back. That last one must not be mistaken for a
+	 * guest path — `posix.normalize('//wsl.localhost/<d>/…')` would turn it into
+	 * `/wsl.localhost/…`, which no distribution has, and the file tree/preview
+	 * would report every file under it missing.
+	 * @param path - an absolute path in any supported spelling, or a relative one.
+	 * @param opts - the relative path's base directory; defaults to the provider cwd.
+	 * @returns the canonical guest target.
+	 */
 	async resolve(path, opts = {}) {
 		if (typeof path !== 'string' || path.length === 0) throw new FsError('cannot resolve an empty path', 'FS_IO_ERROR');
 		const distro = this.resolveDistro();
-		const translated = mirrorToLinux(path) ?? (path.startsWith('/') ? path : toLinuxPath(path, distro));
+		const translated = mirrorToLinux(path) ?? toLinuxPath(path, distro);
 		const guest = translated ?? posix.resolve(opts.cwd ?? this.cwd, path);
 		const canonical = posix.normalize(guest);
 		return { targetKey: canonical, displayPath: canonical };

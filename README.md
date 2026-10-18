@@ -72,6 +72,19 @@ esac
 
 `glob` / `grep` 已经改成 guest 原生（见下节），不再经过宿主进程，所以 `processPath()` 是本 bundle 里**唯一**保留的宿主拼写，只给宿主工具（预览、ripgrep 之类的 Windows 消费者）用。
 
+## 文件路径的四种拼写
+
+`ctx.fs.resolve()` 把送进来的每一个绝对路径都交给 `toLinuxPath()` 翻译一次，所以下面四种拼写都落在同一个 guest 目标上：
+
+| 拼写 | 谁在用 |
+| --- | --- |
+| `/mnt/c/Users/x/a.js` | 模型、会话 cwd、文件工具、工作区注册表 |
+| `C:\Users\x\a.js` | 老会话记住的 Windows 目录、宿主的盘符拼写 |
+| `\\wsl.localhost\Ubuntu\mnt\c\...` | `processPath()` 交给宿主消费者的 UNC 拼写；Windows API 直接可读 |
+| `//wsl.localhost/Ubuntu/mnt/c/...` | **资源地址往返**：`dsh-resource://file/session/<id>/<path>` 会把 `\` 归一成 `/`，Host 再把它当文件路径收到 |
+
+最后一种是 0.3.9 修的 bug：它虽然以 `/` 开头，但不是 guest 路径——旧版 `resolve()` 直接把它当 POSIX 路径接受，`posix.normalize()` 又把 UNC 的 authority 折叠掉，变成 guest 里不存在的 `/wsl.localhost/...`，于是**所有经过资源地址打开的文件**（Sidebar 文件树、文档预览、`@file` 引用、聊天里的文件链接）都报 `not found`。而 `\\wsl.localhost\...` 拼写碰巧能被 `toLinuxPath()` 认出来，所以表现为「同一个文件，有时能打开、有时不能」。现在两种 UNC 拼写都翻译成 guest 路径，`//` 开头的非 WSL 网络共享仍按原样当 POSIX 路径处理。
+
 ## 工作区路径为什么必须是 Linux 路径
 
 随 Harness 发布的 `dsh-workspace` 用**宿主的** `node:fs.realpath` + `stat` 规范化工作区路径。在 Windows 上 `/home/you` 会被解析成 `D:\home\you`，于是只有 `\\wsl.localhost\...` 这样的拼写能存下来——随之而来的就是把 UNC 路径塞进会话 cwd、塞进系统提示词、塞进模型写的每条命令。
