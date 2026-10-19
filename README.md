@@ -79,11 +79,14 @@ esac
 | 拼写 | 谁在用 |
 | --- | --- |
 | `/mnt/c/Users/x/a.js` | 模型、会话 cwd、文件工具、工作区注册表 |
-| `C:\Users\x\a.js` | 老会话记住的 Windows 目录、宿主的盘符拼写 |
-| `\\wsl.localhost\Ubuntu\mnt\c\...` | `processPath()` 交给宿主消费者的 UNC 拼写；Windows API 直接可读 |
+| `C:\Users\x\a.js` | 老会话记住的 Windows 目录；`/mnt/c/...` 的宿主拼写（`processPath()` 现在对 drvfs 路径返回它） |
+| `\\wsl.localhost\Ubuntu\home\you\a.js` | guest 自己 filesystem（ext4）上路径的宿主拼写；WSL 共享对它是可读的 |
+| `\\wsl.localhost\Ubuntu\mnt\c\...` | 旧版 `processPath()` 对 drvfs 的拼写，**Windows shell 打不开**（见下）；`resolve()` 仍接受并翻回 `/mnt/c/...` |
 | `//wsl.localhost/Ubuntu/mnt/c/...` | **资源地址往返**：`dsh-resource://file/session/<id>/<path>` 会把 `\` 归一成 `/`，Host 再把它当文件路径收到 |
 
 最后一种是 0.3.9 修的 bug：它虽然以 `/` 开头，但不是 guest 路径——旧版 `resolve()` 直接把它当 POSIX 路径接受，`posix.normalize()` 又把 UNC 的 authority 折叠掉，变成 guest 里不存在的 `/wsl.localhost/...`，于是**所有经过资源地址打开的文件**（Sidebar 文件树、文档预览、`@file` 引用、聊天里的文件链接）都报 `not found`。而 `\\wsl.localhost\...` 拼写碰巧能被 `toLinuxPath()` 认出来，所以表现为「同一个文件，有时能打开、有时不能」。现在两种 UNC 拼写都翻译成 guest 路径，`//` 开头的非 WSL 网络共享仍按原样当 POSIX 路径处理。
+
+0.3.10 修的是反方向的第二个 bug：**`processPath()` 曾把每个 guest 路径都映射到 `\\wsl.localhost\<d>\...`**，但 `/mnt/<盘>` 是 drvfs（guest 里的 Windows 盘），WSL 的 9P 共享**服务不了 drvfs 挂载**——对共享下的 drvfs 路径，`File.Exists` 为 false、`SHCreateItemFromParsingName` 直接 `E_ACCESSDENIED`。于是文档预览能渲染（走 guest 读），但右上角「用记事本打开 / 在文件夹中显示 / 默认应用打开」全部在 Windows shell 里失败，而且没有任何提示能指出路径拼写不对。现在 `/mnt/<盘>` 的宿主拼写是盘符本身（`C:\Users\...`），ext4 路径仍是 UNC；Host 侧的 `processPathFromHostPath` → `processPath` 往返对两种拼写都成立，所以会话控制器的「已验证宿主路径」检查也放行。顺带修好了 Markdown 预览里引用 `C:` 工作区图片的 `api/file?path=` 加载。
 
 ## 工作区路径为什么必须是 Linux 路径
 

@@ -136,3 +136,33 @@ export function windowsUncPath(distro, linuxPath) {
 	if (typeof linuxPath !== 'string' || !linuxPath.startsWith('/')) return undefined;
 	return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//gu, '\\')}`;
 }
+
+/**
+ * The Windows path a host-side consumer must use for one guest path.
+ *
+ * A guest path under `/mnt/<letter>` **is** Windows drive `<letter>:` — that is
+ * what drvfs mounts — and the WSL UNC share cannot serve a drvfs mount: the
+ * share answers `E_ACCESSDENIED` for anything below it, so `SHCreateItemFromParsingName`
+ * fails, Explorer cannot open the file, and every "open with" gesture dies before
+ * an application is even asked. Those paths therefore map onto the drive itself.
+ *
+ * Every other guest path lives on the distribution's own (ext4) filesystem,
+ * which has no drive letter: the WSL UNC share is the only Windows spelling, and
+ * the Shell serves it fine.
+ *
+ * This is the inverse of {@link toLinuxPath}: both drive spellings round-trip,
+ * which is what `processPathFromHostPath` + `processPath` must do for the
+ * Session controller's "verified Host path" check.
+ * @param distro - the distribution whose share addresses non-drive paths; required for those.
+ * @param linuxPath - an absolute guest path.
+ * @returns the Windows path, or undefined when the inputs cannot name one.
+ */
+export function linuxToWindowsPath(distro, linuxPath) {
+	if (typeof linuxPath !== 'string' || !linuxPath.startsWith('/')) return undefined;
+	const drive = /^\/mnt\/([A-Za-z])(?:\/([\s\S]*))?$/u.exec(linuxPath);
+	if (drive !== null) {
+		const rest = (drive[2] ?? '').replace(/\/+$/u, '');
+		return rest === '' ? `${drive[1].toUpperCase()}:\\` : `${drive[1].toUpperCase()}:\\${rest.replace(/\//gu, '\\')}`;
+	}
+	return windowsUncPath(distro, linuxPath);
+}

@@ -13,8 +13,9 @@
  * {@link FsTarget}'s `targetKey` and `displayPath` are both the guest path, so a
  * conversation shows `/home/you/proj/main.py`, never a UNC spelling. The
  * one host-visible spelling, {@link WslFileSystem.processPath}, is what
- * host-side consumers need (glob/grep's packaged ripgrep, previews, terminals);
- * it maps the guest path back onto the share.
+ * host-side consumers need (file associations, Explorer, previews, terminals);
+ * it maps a `/mnt/<letter>` guest path onto its drive (the WSL share cannot
+ * serve a drvfs mount) and every other guest path onto the WSL share.
  *
  * Commands are delivered to the guest on `bash -l`'s **stdin**, never through
  * argv: an argument that crosses the Windows command line loses its quoting and
@@ -28,7 +29,7 @@ import z from '@deepseek-ai/schemastery';
 import { FsError, FileSystem } from '@deepseek-ai/dsh-fs';
 import { listScript, parseListing, parseStatLine, publishScript, rangeScript, readScript, statScript } from './fsproto.js';
 import { mirrorToLinux } from './mirror.js';
-import { resolveWslExecutable, toLinuxPath, windowsUncPath } from './wsl.js';
+import { linuxToWindowsPath, resolveWslExecutable, toLinuxPath } from './wsl.js';
 
 /** Cordis plugin name. */
 const name = 'wsl-fs';
@@ -194,9 +195,19 @@ class WslFileSystem extends FileSystem {
 		const canonical = posix.normalize(guest);
 		return { targetKey: canonical, displayPath: canonical };
 	}
+	/**
+	 * The Windows spelling host-side consumers use for one guest target.
+	 *
+	 * A `/mnt/<letter>` path names a drive, not the distribution's own
+	 * filesystem, and the WSL share refuses drvfs mounts (`E_ACCESSDENIED`), so
+	 * those map onto the drive spelling itself; everything else maps onto the
+	 * WSL UNC share. See {@link linuxToWindowsPath}.
+	 * @param target - one resolved guest target.
+	 * @returns the Windows path, or the guest path when the distro cannot name one.
+	 */
 	processPath(target) {
 		const key = this.key(target);
-		return windowsUncPath(this.resolveDistro(), key) ?? key;
+		return linuxToWindowsPath(this.resolveDistro(), key) ?? key;
 	}
 	processPathFromHostPath(hostPath) {
 		return mirrorToLinux(hostPath) ?? toLinuxPath(hostPath, this.resolveDistro());
